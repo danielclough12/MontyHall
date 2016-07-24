@@ -1,0 +1,389 @@
+/***********************************************************
+* Daniel Clough
+* 23 July 2016
+* 
+* Suppose you're on a game show, and you're given the      *
+*  choice of three doors: Behind one door is a car;        *
+*  behind the others, goats. You pick a door, say No. 1,   *
+*  and the host, who knows what's behind the doors, opens  *
+*  another door, say No. 3, which has a goat. He then says *
+*  to you, "Do you want to pick door No. 2?" Is it to your *
+*  advantage to switch your choice?                        *
+* Switching will give a 2/3 chance of winning while        *
+*  staying will only give the original 1/3 chance.         *
+************************************************************/
+
+// Global editable variables
+var buttoncol = color(219, 136, 136);
+var buttontext = color(26, 26, 26);
+var numoftrials = 500;
+
+
+//Door variables, (had an issue creating an object)
+var doord1x = 32.5;
+var doory = 70;
+var doorw = 90;
+var doorh = 210;
+var doorcolour = color(230, 32, 52);
+var doord2x = (2*doord1x)+doorw;
+var doord3x = (3*doord1x)+2*doorw;
+
+/*var door = {
+    d1x: 32.5,
+    dy: 70,
+    w: 90,
+    h: 210,
+    colour: color(230,32,52),
+    d2x: (2*door.d1x)+door.w,
+    d3x: (3*door.d1x)+2*door.w };*/
+    
+var handle = {
+    dy: doory+100,
+    rad: 12,
+    colour: color(191, 173, 15) };
+
+var images = {
+    ohnoes: function(num) { image(getImage("creatures/OhNoes"), num*doord1x+(num-1)*doorw-4, doory+120, 100, 100); },
+    rocket: function(num, adj) { image(getImage("space/rocketship"), num*doord1x+(num-1)*doorw-60+adj, doory+125, 180, 190); },
+    star: function(num) { image(getImage("space/star"),num*doord1x+(num-1)*doorw-30,doory-28,150,150); },
+    monty: function() { image(getImage("avatars/mr-pants"),0,165); }
+};
+
+// Global initialisers
+var montyopens = 1;
+var choice = 0;
+var finalchoice =0;
+var seconddoor = 0;
+var rocket = 0;
+var layer = 0;
+var loopIter = 1;
+var winchange =0;
+var losschange =0;
+var winstay =0;
+var lossstay=0;
+var runthrough =1;
+
+/*****************************************
+ *        Graphic Functions
+ ****************************************/
+
+// Base image for each new screen
+var baseLayer = function() {
+    background(121, 136, 252);
+    fill(89, 22, 15);
+    rect(-1,doory+doorh-1,401,121);
+    fill(255, 251, 184);
+    textFont(createFont("serif"), 30);
+    text("The Monty Hall Problem", 10,13, 375, 30);
+    fill(0,0,0);
+    line(10,310,110,310);
+    line(40,350,190,350);
+    line(210,310,310,310);
+    line(180,390,260,390);
+    line(70,365,220,365);
+    line(10,385,90,385);
+    line(260,360,360,360);
+    line(220,335,310,335);
+    line(120,290,190,290);
+    line(330,290,400,290);
+    line(300,380,400,380);
+    line(350,325,400,325);
+    line(0,330,50,330);
+
+    textSize(20);
+    fill(0, 0, 0);
+    text("Door 1", doord1x+10, doory-6);
+    text("Door 2", doord2x+10, doory-6);
+    text("Door 3", doord3x+10, doory-6);
+    
+    fill(doorcolour);
+    rect(doord1x, doory, doorw, doorh);
+    rect(doord2x, doory, doorw, doorh);
+    rect(doord3x, doory, doorw, doorh);
+    
+    fill(handle.colour);
+    ellipse(doord1x+75, handle.dy, handle.rad, handle.rad);
+    ellipse(doord2x+75, handle.dy, handle.rad, handle.rad);
+    ellipse(doord3x+75, handle.dy, handle.rad, handle.rad);
+};
+
+// Image of the open door
+var openDoor = function(num) {
+    var x1 = num*doord1x+(num-1)*doorw;
+    var y1 = doory;
+    var x2 = x1-25;
+    var y2 = y1+45;
+    var y3 = y2+doorh;
+    var y4 = y3-45;
+    fill(doorcolour);
+    quad(x1, y1, x2, y2, x2, y3, x1, y4);
+    fill(0, 0, 0);
+    rect(x1, y1, doorw, doorh);
+};
+
+// Button image
+var button = function() {
+    fill(buttoncol);
+    var button1 = rect(30, 350, 150, 40, 10);
+    var button2 = rect(220, 350, 150, 40, 10);
+    fill(0,0,0);
+    var x1 = 68;
+    var x2 = 265;
+    var y = 385;
+    if (layer===5) {
+        textSize(28);
+        fill(10, 1, 64);
+        text("REPEAT", x1-15, y-4);
+        textSize(25);
+        text("PLAY GAME", x2-40, y-4); }
+    else {
+        fill(buttontext);
+        if (loopIter % 2 === 1) {
+            textSize(35);
+            text("YES", x1, y);
+            text("NO", x2, y);
+            loopIter++; }
+        else {
+            textSize(32);
+            text("RESET", x1-22,y);
+            text("GRAPH",x2-30,y);
+            loopIter++; } }
+};
+
+// Image that shows which door the user chose
+var youChose = function(num) {
+    images.star(num);
+    fill(0,0,0);
+    textSize(18);
+    text("  You\nChose", doord1x*num+(num-1)*doorw+17, doory+44);
+};
+
+// Base Layer for Graph Screen
+var autoScreen = function(wc,lc,ws,ls) {
+    var xaxisy = 310;
+    var xaxisx2 = 350;
+    var yaxisx = 100;
+    var yaxisy1 = 63;
+    var pcts = 67;
+    var barw = 40;
+    var minor1 = 95;
+    var minor2 = 105;
+    fill(0,0,0);
+    textFont(createFont("serif"), 30);
+    text("The Monty Hall Problem", 10,13, 375, 30);
+    stroke(0,0,0);
+    line(yaxisx,yaxisy1,yaxisx,xaxisy);
+    line(yaxisx,xaxisy,xaxisx2,xaxisy);
+    textFont(createFont("fantasy"), 15);
+    text(" W\n    i\nP   n\ne\n r\n c\n  e\n   n\n    t\n     a\n      g\n       e", 15, 85);
+    textSize(12);
+    text("Win%       Loss%", 120, xaxisy+20);
+    text("Win%       Loss%", 250, xaxisy+20);
+    text(round(wc/(numoftrials/100)), yaxisx+21, xaxisy-(3*wc/5)-5);
+    text(round(lc/(numoftrials/100)), yaxisx+85, xaxisy-(3*lc/5)-5);
+    text(round(ws/(numoftrials/100)), yaxisx+155, xaxisy-(3*ws/5)-5);
+    text(round(ls/(numoftrials/100)), yaxisx+220, xaxisy-(3*ls/5)-5);
+    textSize(14);
+    text("80%-", pcts, xaxisy-240);
+    line(minor1, xaxisy-210, minor2, xaxisy-210);
+    text("60%-----------------------------------------------------", pcts, xaxisy-180);
+    line(minor1, xaxisy-150, minor2, xaxisy-150);
+    text("40%-----------------------------------------------------", pcts, xaxisy-120);
+    line(minor1, xaxisy-90, minor2, xaxisy-90);
+    text("20%-----------------------------------------------------", pcts, xaxisy-60);
+    line(minor1, xaxisy-30, minor2, xaxisy-30);
+    text(" 0%", pcts, xaxisy);
+    fill(96, 123, 219);
+    rect(yaxisx+13, xaxisy, barw, -(3*wc/(numoftrials/100)));
+    rect(yaxisx+77, xaxisy, barw, -(3*lc/(numoftrials/100)));
+    fill(214, 23, 23);
+    rect(yaxisx+146, xaxisy, barw, -(3*ws/(numoftrials/100)));
+    rect(yaxisx+209, xaxisy, barw, -(3*ls/(numoftrials/100)));
+    fill(96,123,219);
+    text(" Always\nChange", 170, yaxisy1);
+    fill(214,23,23);
+    text("Always\n  Stay", 255, yaxisy1);
+    fill(0,0,0);
+    textAlign(CENTER);
+    text("# of Trials:\n"+numoftrials, 230, yaxisy1+40);
+    textAlign(LEFT);
+};
+
+/***************************************************************/
+
+// Clickable area for each door
+var doorArea = function(num) {
+    var dxstart=num*doord1x+(num-1)*doorw;
+    var dxend=num*doord1x+num*doorw;
+    var dystart=doory;
+    var dyend=doory+doorh;
+    if (mouseX>dxstart && mouseX<dxend && mouseY>dystart && mouseY<dyend) {return true;}
+    else { return false; }
+};
+
+// Called if you decide to switch door after first reveal
+var doorSwitch = function(num, montyopens) {
+    for (var i = 1; i<=3; i++) {
+        if ((i!==num) && (i!==montyopens)) {
+            return i; } }
+};
+
+//Screen after first reveal asking if you want to change your door choice
+var changeDoor = function () {
+    fill (255, 255,255);
+    textSize(20);
+    text("Would you like to change your door?", 15, 335);
+    button();
+};
+
+// Called after user clicks initial door that automatically
+//   chooses a different door to open
+var firstDoor = function(num) {
+    while ((montyopens === num) || (montyopens===rocket)) {
+        montyopens = round(random(1,3)); }
+    if (layer !== 5) {
+        openDoor(montyopens);
+        images.ohnoes(montyopens);
+        changeDoor(); }
+    return montyopens;
+};
+
+// Called after user decides to change or stay doors
+//   that reveals if user won or lost
+var secondDoor = function(num) {
+    if (num===rocket) {
+        if (num===3) {
+            images.rocket(num, 0); }
+        else {
+            images.rocket(num, 50); }
+        fill(255,255,255);
+        textSize(70);
+        text("YOU WIN", 30, 150); }
+    else {
+        images.ohnoes(num);
+        fill(255,255,255);
+        textSize(22);
+        text("Better luck next time...",15, 335); }
+    button();
+    layer++;
+};
+
+// Main
+draw = function() {
+    switch(layer) {
+        // Starts at the beginning of the game with
+        //   an option to go straight to the graph
+        case(0):
+            baseLayer();
+            fill(255,255,255);
+            textSize(40);
+            text("P", 66, 330);
+            textSize(20);
+            text("LEASE CHOOSE A DOOR",90,330);
+            images.monty();
+            textSize(15);
+            text("OR GO TO", 130, 370);
+            fill(buttoncol);
+            rect(220,345,100,40,10);
+            fill(buttontext);
+            textSize(22);
+            text("GRAPH",226,373);
+            mouseClicked = function() {
+                    rocket = floor(random(1,4));
+                    layer++; };
+            break;
+        case(1):
+            // Call baseLayer to remove Monty and the previous text
+            baseLayer();
+            // Determine if we pushed Graph
+            if (mouseX>220 && mouseX<320 && mouseY>345 && mouseY<385) { layer=5; break; }
+            // If not then determine which door we picked, if any
+            if(doorArea(1)) {
+                youChose(1);
+                montyopens = firstDoor(1);
+                choice=1; }
+            else if (doorArea(2)) {
+                youChose(2);
+                montyopens = firstDoor(2);
+                choice=2; }
+            else if (doorArea(3)) {
+                youChose(3);
+                montyopens = firstDoor(3);
+                choice=3; }
+            else { layer=0; break; }
+            layer++;
+            break;
+        case(2):
+            // Wait for user to click either Yes or No to
+            //   change door or stay with current door
+            mouseClicked = function() {
+                if (mouseX>30 && mouseX<180 && mouseY>340 && mouseY<390) {
+                    seconddoor = doorSwitch(choice, montyopens);
+                    layer++; }
+                else if (mouseX>220 && mouseX<370 && mouseY>340 && mouseY<390) {
+                    seconddoor = choice;
+                    layer++; } };
+            break;
+        case(3):
+            // Call base layer to remove buttons and text
+            baseLayer();
+            // Call the first door function again to continue
+            //   to show OhNoes from the first door.
+            openDoor(montyopens);
+            images.ohnoes(montyopens);
+            // Then open second door and show whether user
+            //   won or not
+            openDoor(seconddoor);
+            secondDoor(seconddoor);
+            break;
+        case(4):
+            // Give option to start game from beginning or
+            //   move to graph
+            mouseClicked = function () {
+                if (mouseX>30 && mouseX<180 && mouseY>340 && mouseY<390) {
+                    layer = 0; }
+                else if (mouseX>220 && mouseX<370 && mouseY>340 && mouseY<390) {
+                    layer++; } };
+            break;
+        case(5):
+            // This case is only the graph screen
+            // Must use this if statement so that the program
+            //    doesn't run continuously
+            if (runthrough===1) {
+                background(255,255,255);
+                // We always choose 1 so montyopens will be 2 or 3
+                for(var i=0; i<=numoftrials; i++) {
+                    rocket = floor(random(1,4));
+                    montyopens = firstDoor(1);
+                    if (montyopens === 2) { 
+                        if (rocket === 3) { winchange++; }
+                        else { losschange++; } }
+                    else { 
+                        if (rocket === 2) { winchange++; }
+                        else { losschange++; } } }
+                // Create 2 for-loops for unique results
+                for(var j=0; j<=numoftrials; j++) {
+                    rocket = floor(random(1,4));
+                    montyopens = firstDoor(1);
+                    if (rocket === 1) { winstay++; }
+                    else { lossstay++; } }
+                autoScreen(winchange, losschange, winstay, lossstay);
+                button();
+                // Option to run the loops again or go to case(0) and
+                //   play game
+                mouseClicked = function () {
+                    if (mouseX>30 && mouseX<180 && mouseY>340 && mouseY<390) {
+                        // reset values
+                        winchange=0; losschange =0; winstay =0; lossstay =0;
+                        runthrough = 1;
+                        return; }
+                    else if (mouseX>220 && mouseX<370 && mouseY>340 && mouseY<390) {
+                        winchange=0; losschange =0; winstay =0; lossstay =0;
+                        runthrough = 1;
+                        layer = 0;} }; }
+            runthrough++;
+            break;
+        default:
+            return;
+    }
+};
